@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Expression Calculator Using Stack | DSA Mini Project</title>
+    <meta name="description" content="Infix to Postfix Expression Calculator using Stack — B.Tech DSA Mini Project by Sneha Mangwani, LPU." />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <!-- ======================================================
+         NAVBAR
+    ====================================================== -->
+    <header class="navbar" role="banner">
+        <div class="navbar-inner">
+            <div class="navbar-brand">
+                <div class="brand-icon" aria-hidden="true">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">Expression Calculator Using Stack</span>
+                    <span class="brand-subtitle">Data Structures &amp; Algorithms Mini Project</span>
+                </div>
+            </div>
+            <div class="navbar-actions">
+                <button id="theme-toggle" class="btn-icon" title="Toggle Theme" aria-label="Toggle theme">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ======================================================
+         MAIN
+    ====================================================== -->
+    <main class="main-container" role="main">
+
+        <!-- ---- Developer Card ---- -->
+        <div class="dev-card">
+            <div class="dev-card-left">
+                <div class="dev-avatar" aria-hidden="true">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="dev-info">
+                    <span class="dev-label">Developed By</span>
+                    <span class="dev-name">Sneha Mangwani</span>
+                    <span class="dev-meta">B.Tech CSE &nbsp;·&nbsp; Lovely Professional University</span>
+                </div>
+            </div>
+            <div class="lpu-badge">
+                <span class="lpu-text">LPU</span>
+            </div>
+        </div>
+
+        <!-- ---- Calculator Card ---- -->
+        <section class="card calculator-card" aria-labelledby="calc-heading">
+
+            <div class="card-header">
+                <h1 id="calc-heading" class="card-title">
+                    <i class="fas fa-calculator" aria-hidden="true"></i>
+                    Infix Expression Input
+                </h1>
+                <button id="random-btn" class="btn-secondary" aria-label="Load random example">
+                    <i class="fas fa-dice" aria-hidden="true"></i>
+                    Example
+                </button>
+            </div>
+
+            <!-- Supported operators -->
+            <div class="operator-row" aria-label="Supported operators">
+                <span class="op-chip"><kbd>+</kbd></span>
+                <span class="op-chip"><kbd>-</kbd></span>
+                <span class="op-chip"><kbd>*</kbd></span>
+                <span class="op-chip"><kbd>/</kbd></span>
+                <span class="op-chip"><kbd>%</kbd></span>
+                <span class="op-chip"><kbd>^</kbd></span>
+                <span class="op-chip"><kbd>( )</kbd></span>
+                <span class="op-note">Supported operators &amp; grouping</span>
+            </div>
+
+            <!-- Input -->
+            <div class="input-group">
+                <label for="expression-input" class="input-label">Enter Infix Expression</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-subscript input-prefix-icon" aria-hidden="true"></i>
+                    <input
+                        type="text"
+                        id="expression-input"
+                        class="expression-input"
+                        placeholder="e.g.  ((12+4)*5)-(8/2)"
+                        autocomplete="off"
+                        autocorrect="off"
+                        spellcheck="false"
+                        aria-label="Infix expression input"
+                    />
+                    <button id="clear-input-btn" class="input-clear-btn" title="Clear" aria-label="Clear input">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <p class="input-hint">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i>
+                    Supports integers, decimals, nested brackets. Press <kbd>Enter</kbd> to calculate.
+                </p>
+            </div>
+
+            <!-- Buttons -->
+            <div class="action-buttons" role="group">
+                <button id="calculate-btn" class="btn-primary" aria-label="Convert and evaluate">
+                    <span class="btn-icon-left"><i class="fas fa-play-circle" aria-hidden="true"></i></span>
+                    <span class="btn-text">Convert &amp; Evaluate</span>
+                    <span class="btn-loader" aria-hidden="true"></span>
+                </button>
+                <button id="reset-btn" class="btn-ghost" aria-label="Reset">
+                    <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                    Reset
+                </button>
+            </div>
+
+            <!-- Error panel -->
+            <div id="error-panel" class="error-panel" role="alert" aria-live="assertive" hidden>
+                <span class="error-icon" id="error-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                <span id="error-text"></span>
+            </div>
+
+        </section>
+
+        <!-- ---- Progress Indicator (shown after calculate) ---- -->
+        <div class="progress-bar" id="progress-bar" hidden aria-label="Calculation progress">
+            <div class="progress-step done" id="prog-input">
+                <div class="prog-dot"></div>
+                <span>Input</span>
+            </div>
+            <div class="prog-line"></div>
+            <div class="progress-step done" id="prog-convert">
+                <div class="prog-dot"></div>
+                <span>Conversion</span>
+            </div>
+            <div class="prog-line"></div>
+            <div class="progress-step done" id="prog-eval">
+                <div class="prog-dot"></div>
+                <span>Evaluation</span>
+            </div>
+            <div class="prog-line"></div>
+            <div class="progress-step done" id="prog-result">
+                <div class="prog-dot"></div>
+                <span>Result</span>
+            </div>
+        </div>
+
+        <!-- ======================================================
+             RESULTS SECTION
+        ====================================================== -->
+        <section id="results-section" hidden aria-labelledby="results-heading">
+            <h2 id="results-heading" class="section-heading">
+                <i class="fas fa-chart-line" aria-hidden="true"></i>
+                Calculation Results
+            </h2>
+
+            <!-- Overview cards -->
+            <div class="overview-grid">
+                <div class="overview-card card" id="original-card">
+                    <div class="overview-label">
+                        <i class="fas fa-code" aria-hidden="true"></i>
+                        Original Expression
+                    </div>
+                    <div class="overview-value mono" id="original-expr"></div>
+                </div>
+
+                <div class="overview-arrow" aria-hidden="true">
+                    <i class="fas fa-arrow-down"></i>
+                </div>
+
+                <div class="overview-card card" id="postfix-card">
+                    <div class="overview-label">
+                        <i class="fas fa-code-branch" aria-hidden="true"></i>
+                        Postfix Expression
+                    </div>
+                    <div class="overview-value mono" id="postfix-expr"></div>
+                </div>
+
+                <div class="overview-arrow" aria-hidden="true">
+                    <i class="fas fa-arrow-down"></i>
+                </div>
+
+                <div class="overview-card card result-card" id="result-card">
+                    <div class="overview-label">
+                        <i class="fas fa-equals" aria-hidden="true"></i>
+                        Final Answer
+                    </div>
+                    <div class="overview-value result-value" id="final-result"></div>
+                    <div class="result-actions">
+                        <button id="copy-result-btn" class="btn-xs" aria-label="Copy result">
+                            <i class="fas fa-copy" aria-hidden="true"></i> Copy
+                        </button>
+                        <button id="download-btn" class="btn-xs" aria-label="Download result">
+                            <i class="fas fa-download" aria-hidden="true"></i> Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------
+                 STEP 1 — INFIX TO POSTFIX
+            ------------------------------------------------ -->
+            <div class="card steps-card" aria-labelledby="conversion-heading">
+                <div class="card-header">
+                    <h2 id="conversion-heading" class="section-title">
+                        <span class="step-badge">1</span>
+                        Infix → Postfix Conversion
+                    </h2>
+                    <span class="algo-tag">Shunting-Yard Algorithm</span>
+                </div>
+
+                <div class="steps-layout">
+                    <div class="steps-table-wrap">
+                        <table class="steps-table" id="conversion-table" aria-label="Conversion steps">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Token</th>
+                                    <th>Action</th>
+                                    <th>Operator Stack</th>
+                                    <th>Postfix Output</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conversion-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Operator stack viz -->
+                    <div class="stack-panel" aria-label="Operator stack">
+                        <div class="stack-panel-title">
+                            <i class="fas fa-layer-group" aria-hidden="true"></i>
+                            Operator Stack
+                        </div>
+                        <div class="stack-top-label">TOP</div>
+                        <div class="stack-viz" id="op-stack-viz" aria-live="polite">
+                            <div class="stack-empty-msg">Empty</div>
+                        </div>
+                        <div class="stack-bottom-label">BOTTOM</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------
+                 STEP 2 — POSTFIX EVALUATION
+            ------------------------------------------------ -->
+            <div class="card steps-card" aria-labelledby="evaluation-heading">
+                <div class="card-header">
+                    <h2 id="evaluation-heading" class="section-title">
+                        <span class="step-badge">2</span>
+                        Postfix Evaluation
+                    </h2>
+                    <span class="algo-tag">Stack-based Evaluation</span>
+                </div>
+
+                <div class="steps-layout">
+                    <div class="steps-table-wrap">
+                        <table class="steps-table" id="evaluation-table" aria-label="Evaluation steps">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Token</th>
+                                    <th>Action</th>
+                                    <th>Operand Stack</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluation-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Operand stack viz -->
+                    <div class="stack-panel" aria-label="Operand stack">
+                        <div class="stack-panel-title">
+                            <i class="fas fa-layer-group" aria-hidden="true"></i>
+                            Operand Stack
+                        </div>
+                        <div class="stack-top-label">TOP</div>
+                        <div class="stack-viz" id="eval-stack-viz" aria-live="polite">
+                            <div class="stack-empty-msg">Empty</div>
+                        </div>
+                        <div class="stack-bottom-label">BOTTOM</div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ======================================================
+             HISTORY
+        ====================================================== -->
+        <section class="card history-section" id="history-section" aria-labelledby="history-heading">
+            <div class="card-header">
+                <h2 id="history-heading" class="section-title">
+                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+                    Expression History
+                </h2>
+                <button id="clear-history-btn" class="btn-ghost btn-sm" aria-label="Clear history">
+                    <i class="fas fa-trash" aria-hidden="true"></i>
+                    Clear
+                </button>
+            </div>
+            <div id="history-list" class="history-list" role="list">
+                <div class="history-empty" id="history-empty">
+                    <i class="fas fa-inbox" aria-hidden="true"></i>
+                    <p>No history yet. Calculate something!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================
+             INFO SECTION — Educational
+        ====================================================== -->
+        <section class="card info-section" aria-labelledby="info-heading">
+            <h2 id="info-heading" class="section-title">
+                <i class="fas fa-book-open" aria-hidden="true"></i>
+                Project Information
+            </h2>
+
+            <div class="info-grid">
+
+                <div class="info-block">
+                    <div class="info-block-title">
+                        <i class="fas fa-sitemap" aria-hidden="true"></i>
+                        Algorithm Used
+                    </div>
+                    <p class="info-value">Shunting-Yard Algorithm</p>
+                    <p class="info-desc">Developed by Edsger Dijkstra. Converts infix expressions to postfix using an operator stack.</p>
+                </div>
+
+                <div class="info-block">
+                    <div class="info-block-title">
+                        <i class="fas fa-layer-group" aria-hidden="true"></i>
+                        Data Structure Used
+                    </div>
+                    <p class="info-value">Stack (STL)</p>
+                    <p class="info-desc">
+                        <code>std::stack&lt;string&gt;</code> — Operator Stack<br>
+                        <code>std::stack&lt;double&gt;</code> — Operand Stack
+                    </p>
+                </div>
+
+                <div class="info-block">
+                    <div class="info-block-title">
+                        <i class="fas fa-clock" aria-hidden="true"></i>
+                        Time Complexity
+                    </div>
+                    <div class="complexity-row">
+                        <span class="complexity-label">Infix → Postfix</span>
+                        <code class="complexity-val">O(n)</code>
+                    </div>
+                    <div class="complexity-row">
+                        <span class="complexity-label">Postfix Evaluation</span>
+                        <code class="complexity-val">O(n)</code>
+                    </div>
+                    <div class="complexity-row">
+                        <span class="complexity-label">Space Complexity</span>
+                        <code class="complexity-val">O(n)</code>
+                    </div>
+                </div>
+
+                <div class="info-block">
+                    <div class="info-block-title">
+                        <i class="fas fa-globe" aria-hidden="true"></i>
+                        Applications
+                    </div>
+                    <ul class="app-list">
+                        <li>Compilers &amp; Interpreters</li>
+                        <li>Expression Parsing</li>
+                        <li>Scientific Calculators</li>
+                        <li>Programming Languages</li>
+                    </ul>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ======================================================
+         TOAST
+    ====================================================== -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- ======================================================
+         FOOTER
+    ====================================================== -->
+    <footer class="site-footer" role="contentinfo">
+        <div class="footer-inner">
+            <p class="footer-title">Expression Calculator Using Stack</p>
+            <p class="footer-sub">Data Structures Mini Project</p>
+            <div class="footer-divider"></div>
+            <p class="footer-dev">Developed by <strong>Sneha Mangwani</strong></p>
+            <p class="footer-meta">B.Tech CSE &nbsp;·&nbsp; Lovely Professional University</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
