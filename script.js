@@ -467,10 +467,12 @@ function hideError() {
 
 /* ---- Syntax Highlighting ---------------------------------- */
 function highlightExpression(expr) {
-    return expr
-        .replace(/(\d+\.?\d*)/g, '<span class="expr-num">$1</span>')
-        .replace(/([+\-*\/%^])/g, '<span class="expr-op">$1</span>')
-        .replace(/([()])/g,       '<span class="expr-paren">$1</span>');
+    // Single pass, so later replacements never touch the <span> markup already inserted
+    return expr.replace(/(\d+\.?\d*)|([+\-*\/%^])|([()])/g, function (m, num, op, paren) {
+        if (num) return '<span class="expr-num">' + num + '</span>';
+        if (op)  return '<span class="expr-op">' + op + '</span>';
+        return '<span class="expr-paren">' + paren + '</span>';
+    });
 }
 
 /* ---- Highlight Processed Token --------------------------- */
