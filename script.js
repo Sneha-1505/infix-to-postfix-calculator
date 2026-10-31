@@ -1,108 +1,175 @@
 /**
  * ============================================================
  *  script.js — Expression Calculator Using Stack
- *  DSA Mini Project · Sneha Mangwani · LPU
+ *  Front-end engine (mirrors C++ stack_algorithm logic)
+ * ============================================================
+ *
+ *  This file implements the FULL infix→postfix→evaluation
+ *  algorithm in JavaScript, mirroring the C++ backend.
+ *
+ *  Data Structures (mirrors C++ STL):
+ *    - JS Array as Stack  → push() / pop() / at(-1)
+ *    - Array of tokens    → mirrors std::vector<std::string>
+ *    - Objects            → mirrors C++ structs
+ *
+ *  Sections:
+ *    1. Algorithm Engine  (pure functions, no DOM)
+ *    2. DOM Controller    (UI render, event handling)
+ *    3. Stack Visualizer  (animated stack display)
+ *    4. History Manager   (localStorage-backed)
+ *    5. App Initializer   (wires everything together)
  * ============================================================
  */
 
+'use strict';
+
 /* ============================================================
-   SECTION 1: ALGORITHM ENGINE (Pure functions)
+   SECTION 1: ALGORITHM ENGINE
+   Pure functions — no DOM dependencies.
+   Mirrors C++ stack_algorithm.cpp exactly.
 ============================================================ */
 
+/**
+ * getPrecedence()
+ * Returns operator precedence level.
+ * Mirrors C++ getPrecedence().
+ * @param {string} op
+ * @returns {number}
+ */
 function getPrecedence(op) {
-    if (op === '^') return 3;
-    if (op === '*' || op === '/' || op === '%') return 2;
-    if (op === '+' || op === '-') return 1;
-    return 0;
+    switch (op) {
+        case '^': return 3;       // Highest: exponentiation
+        case '*':
+        case '/':
+        case '%': return 2;       // Multiplication, division, modulo
+        case '+':
+        case '-': return 1;       // Addition, subtraction
+        default:  return 0;
+    }
 }
 
+/**
+ * isRightAssociative()
+ * Only '^' is right-associative.
+ * Mirrors C++ isRightAssociative().
+ * @param {string} op
+ * @returns {boolean}
+ */
 function isRightAssociative(op) {
     return op === '^';
 }
 
+/**
+ * isOperator()
+ * Returns true if character is a supported binary operator.
+ * @param {string} c
+ * @returns {boolean}
+ */
 function isOperator(c) {
-    return c === '+' || c === '-' || c === '*' || c === '/' || c === '%' || c === '^';
+    return ['+', '-', '*', '/', '%', '^'].includes(c);
 }
 
+/**
+ * isNumericToken()
+ * Returns true if the string represents a number.
+ * @param {string} t
+ * @returns {boolean}
+ */
 function isNumericToken(t) {
-    if (t === null || t === undefined) return false;
     return /^-?\d+(\.\d+)?$/.test(t) || /^\d*\.\d+$/.test(t);
 }
 
-function formatNum(v) {
-    if (v === null || v === undefined) return '0';
-    if (Number.isInteger(v)) return String(v);
-    return parseFloat(v.toFixed(8)).toString();
-}
-
-/* ---- Validate Expression ---------------------------------- */
+/**
+ * validateExpression()
+ * Comprehensive validation of the infix expression.
+ * Returns "" on success, error message string on failure.
+ * Mirrors C++ validateExpression().
+ * @param {string} expr
+ * @returns {string}
+ */
 function validateExpression(expr) {
+    // Empty check
     if (!expr || expr.trim().length === 0) {
-        return '❌ Invalid Expression: Input is empty';
+        return 'Error: Expression is empty. Please enter a valid mathematical expression.';
     }
 
-    var e = expr.trim();
+    const e = expr.trim();
 
-    // Check for invalid characters
-    var invalidMatch = e.match(/[^\d\s\+\-\*\/\%\^\(\)\.]/);
-    if (invalidMatch) {
-        return "❌ Invalid Expression: Character '" + invalidMatch[0] + "' is not allowed";
+    // Allowed characters only
+    if (/[^\d\s\+\-\*\/\%\^\(\)\.]/.test(e)) {
+        const invalid = e.match(/[^\d\s\+\-\*\/\%\^\(\)\.]/);
+        return `Error: Invalid character '${invalid[0]}' found in expression.`;
     }
 
     // Balanced parentheses
-    var depth = 0;
-    for (var i = 0; i < e.length; i++) {
+    let depth = 0;
+    for (let i = 0; i < e.length; i++) {
         if (e[i] === '(') depth++;
         else if (e[i] === ')') depth--;
-        if (depth < 0) return "⚠ Unbalanced Parentheses: Parenthesis ')' without matching '('";
+        if (depth < 0) return "Error: Unbalanced parentheses — ')' without matching '('.";
     }
-    if (depth !== 0) return "⚠ Unbalanced Parentheses: " + depth + " unclosed '(' parenthesis";
+    if (depth !== 0) return `Error: Unbalanced parentheses — ${depth} unclosed '(' found.`;
 
-    var clean = e.replace(/\s+/g, '');
-    if (!clean) return '❌ Invalid Expression: Empty input';
+    // Remove spaces for further checks
+    const clean = e.replace(/\s+/g, '');
+    if (!clean) return 'Error: Expression is empty after removing spaces.';
 
-    var first = clean[0];
-    var last  = clean[clean.length - 1];
+    const first = clean[0];
+    const last  = clean[clean.length - 1];
 
+    // Start/end checks
     if (isOperator(first) && first !== '-') {
-        return "❌ Invalid Expression: Cannot start with operator '" + first + "'";
+        return `Error: Expression cannot start with operator '${first}'.`;
     }
     if (isOperator(last)) {
-        return "❌ Invalid Expression: Cannot end with operator '" + last + "'";
+        return `Error: Expression cannot end with operator '${last}'.`;
     }
-    if (first === ')') return "❌ Invalid Expression: Cannot start with ')'";
-    if (last  === '(') return "❌ Invalid Expression: Cannot end with '('";
+    if (first === ')') return "Error: Expression cannot start with ')'.";
+    if (last  === '(') return "Error: Expression cannot end with '('.";
 
-    if (/\(\)/.test(clean)) return "❌ Invalid Expression: Empty parentheses '()' are not allowed";
+    // Empty parentheses
+    if (/\(\)/.test(clean)) return "Error: Empty parentheses '()' are not allowed.";
 
-    // Consecutive operators
-    for (var j = 0; j < clean.length - 1; j++) {
-        var cur  = clean[j];
-        var next = clean[j + 1];
+    // Consecutive operators (allow unary minus after '(')
+    for (let i = 0; i < clean.length - 1; i++) {
+        const cur  = clean[i];
+        const next = clean[i + 1];
         if (isOperator(cur) && isOperator(next)) {
-            return "❌ Invalid Expression: Consecutive operators '" + cur + next + "' are not allowed";
+            // Allow only: ( - ... scenario handled by tokenizer
+            // But consecutive like ++ or ** etc. are invalid
+            if (!(cur === '(' && next === '-')) {
+                return `Error: Consecutive operators found near position ${i}.`;
+            }
         }
     }
 
-    return '';
+    return ''; // Valid
 }
 
-/* ---- Tokenize --------------------------------------------- */
+/**
+ * tokenize()
+ * Splits expression into array of string tokens.
+ * Handles multi-digit numbers, decimals, and unary minus.
+ * Mirrors C++ tokenize().
+ * @param {string} expr
+ * @returns {string[]}
+ */
 function tokenize(expr) {
-    var tokens = [];
-    var numBuf = '';
-    var clean  = expr.replace(/\s+/g, '');
+    const tokens = [];
+    let   numBuf = '';
+    const clean  = expr.replace(/\s+/g, '');
 
-    for (var i = 0; i < clean.length; i++) {
-        var c = clean[i];
+    for (let i = 0; i < clean.length; i++) {
+        const c = clean[i];
 
         if (/[\d\.]/.test(c)) {
             numBuf += c;
         } else {
             if (numBuf) { tokens.push(numBuf); numBuf = ''; }
-            // Unary minus: at start or after '('
+
+            // Handle unary minus: at start or after '('
             if (c === '-' && (tokens.length === 0 || tokens[tokens.length - 1] === '(')) {
-                tokens.push('0');
+                tokens.push('0'); // treat as (0 - x)
             }
             tokens.push(c);
         }
@@ -112,158 +179,207 @@ function tokenize(expr) {
     return tokens;
 }
 
-/* ---- Stack helpers ---------------------------------------- */
+/**
+ * stackToString()
+ * Converts a stack array to a display string (bottom→top).
+ * @param {string[]} stack
+ * @returns {string}
+ */
 function stackToString(stack) {
-    if (!stack || stack.length === 0) return '(empty)';
+    if (stack.length === 0) return '(empty)';
     return stack.join(' | ');
 }
 
+/**
+ * evalStackToString()
+ * Converts a numeric stack array to display string.
+ * @param {number[]} stack
+ * @returns {string}
+ */
 function evalStackToString(stack) {
-    if (!stack || stack.length === 0) return '(empty)';
-    var parts = [];
-    for (var i = 0; i < stack.length; i++) {
-        parts.push(formatNum(stack[i]));
-    }
-    return parts.join(' | ');
+    if (stack.length === 0) return '(empty)';
+    return stack.map(v => formatNum(v)).join(' | ');
 }
 
-/* ---- Infix to Postfix ------------------------------------- */
+/**
+ * formatNum()
+ * Formats a number removing unnecessary decimals.
+ * @param {number} v
+ * @returns {string}
+ */
+function formatNum(v) {
+    if (Number.isInteger(v)) return String(v);
+    // Round to 8 decimal places to avoid floating point noise
+    return parseFloat(v.toFixed(8)).toString();
+}
+
+/**
+ * infixToPostfix()
+ * Shunting-Yard algorithm implementation.
+ * Mirrors C++ infixToPostfix().
+ *
+ * @param {string} infix
+ * @returns {{ postfix: string, steps: ConversionStep[] }}
+ */
 function infixToPostfix(infix) {
-    var steps         = [];
-    var tokens        = tokenize(infix);
-    var operatorStack = [];
-    var postfix       = '';
+    const steps          = [];  // ConversionStep records
+    const tokens         = tokenize(infix);
+    const operatorStack  = [];  // mirrors std::stack<std::string>
+    let   postfix        = '';  // output string
 
-    for (var t = 0; t < tokens.length; t++) {
-        var token = tokens[t];
-        var step  = { token: token, action: '', stackState: '', postfixSoFar: '' };
+    for (const token of tokens) {
+        const step = { token, action: '', stackState: '', postfixSoFar: '' };
 
+        // ---- Operand (number) ----
         if (isNumericToken(token)) {
             postfix += (postfix ? ' ' : '') + token;
-            step.action = "Operand '" + token + "' added to postfix output";
+            step.action = `Operand '${token}' → add directly to postfix output`;
         }
+
+        // ---- Left parenthesis ----
         else if (token === '(') {
             operatorStack.push(token);
-            step.action = "Left parenthesis '(' pushed to operator stack";
+            step.action = "Left parenthesis '(' → push to operator stack";
         }
+
+        // ---- Right parenthesis ----
         else if (token === ')') {
-            var popped = '';
+            let popped = '';
             while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== '(') {
-                var top = operatorStack.pop();
+                const top = operatorStack.pop();
                 postfix += (postfix ? ' ' : '') + top;
                 popped  += top + ' ';
             }
             if (operatorStack.length > 0) operatorStack.pop(); // discard '('
-            step.action = "Right parenthesis ')' encountered. Popped [" + popped.trim() + "] to postfix and discarded '('";
+            step.action = `Right parenthesis ')' → pop [${popped.trim()}] to postfix, discard '('`;
         }
+
+        // ---- Operator ----
         else if (isOperator(token)) {
-            var poppedOps = '';
+            let popped = '';
             while (
                 operatorStack.length > 0 &&
                 operatorStack[operatorStack.length - 1] !== '(' &&
                 isOperator(operatorStack[operatorStack.length - 1])
             ) {
-                var topOp  = operatorStack[operatorStack.length - 1];
-                var topPre = getPrecedence(topOp);
-                var curPre = getPrecedence(token);
-                var shouldPop = (topPre > curPre) ||
-                                (topPre === curPre && !isRightAssociative(token));
+                const topOp  = operatorStack[operatorStack.length - 1];
+                const topPre = getPrecedence(topOp);
+                const curPre = getPrecedence(token);
+                const shouldPop = (topPre > curPre) ||
+                                  (topPre === curPre && !isRightAssociative(token));
                 if (!shouldPop) break;
 
-                var op = operatorStack.pop();
-                postfix  += (postfix ? ' ' : '') + op;
-                poppedOps += op + ' ';
+                const op = operatorStack.pop();
+                postfix += (postfix ? ' ' : '') + op;
+                popped  += op + ' ';
             }
             operatorStack.push(token);
-            if (poppedOps) {
-                step.action = "Operator '" + token + "' has lower/equal precedence than stack top. Popped [" + poppedOps.trim() + "] then pushed '" + token + "'";
-            } else {
-                step.action = "Operator '" + token + "' pushed to operator stack";
-            }
+            step.action = `Operator '${token}' → popped [${popped.trim()}], pushed '${token}' to stack`;
         }
 
-        step.stackState   = stackToString(operatorStack.slice());
+        step.stackState   = stackToString([...operatorStack]);
         step.postfixSoFar = postfix;
         steps.push(step);
     }
 
-    // Drain remaining operators
+    // Drain remaining operators from stack to output
     while (operatorStack.length > 0) {
-        var rem = operatorStack.pop();
-        postfix += (postfix ? ' ' : '') + rem;
+        const op = operatorStack.pop();
+        postfix += (postfix ? ' ' : '') + op;
         steps.push({
-            token:        rem,
-            action:       "End of expression. Popped remaining operator '" + rem + "' from stack to postfix",
-            stackState:   stackToString(operatorStack.slice()),
+            token:        op,
+            action:       `End of input → pop '${op}' from stack to postfix`,
+            stackState:   stackToString([...operatorStack]),
             postfixSoFar: postfix
         });
     }
 
-    return { postfix: postfix, steps: steps };
+    return { postfix, steps };
 }
 
-/* ---- Apply Operation -------------------------------------- */
+/**
+ * applyOperation()
+ * Applies a binary arithmetic operation.
+ * Mirrors C++ applyOperation().
+ * @param {number} a  left operand
+ * @param {number} b  right operand
+ * @param {string} op operator
+ * @returns {number}
+ */
 function applyOperation(a, b, op) {
-    if (op === '+') return a + b;
-    if (op === '-') return a - b;
-    if (op === '*') return a * b;
-    if (op === '/') {
-        if (b === 0) throw new Error('⚠ Division by Zero: Division by zero is undefined');
-        return a / b;
+    switch (op) {
+        case '+': return a + b;
+        case '-': return a - b;
+        case '*': return a * b;
+        case '/':
+            if (b === 0) throw new Error('Error: Division by zero is undefined.');
+            return a / b;
+        case '%':
+            if (b === 0) throw new Error('Error: Modulo by zero is undefined.');
+            return a % b;
+        case '^':
+            return Math.pow(a, b);
+        default:
+            throw new Error(`Error: Unknown operator '${op}'.`);
     }
-    if (op === '%') {
-        if (b === 0) throw new Error('⚠ Modulo by Zero: Modulo by zero is undefined');
-        return a % b;
-    }
-    if (op === '^') return Math.pow(a, b);
-    throw new Error("❌ Invalid Expression: Unknown operator '" + op + "'");
 }
 
-/* ---- Evaluate Postfix ------------------------------------- */
+/**
+ * evaluatePostfix()
+ * Stack-based postfix evaluation.
+ * Mirrors C++ evaluatePostfix().
+ * @param {string} postfix
+ * @returns {{ result: number, steps: EvaluationStep[] }}
+ */
 function evaluatePostfix(postfix) {
-    var steps        = [];
-    var operandStack = [];
-    var tokens       = postfix.split(/\s+/);
-    var filteredTokens = [];
-    for (var f = 0; f < tokens.length; f++) {
-        if (tokens[f] !== '') filteredTokens.push(tokens[f]);
-    }
+    const steps        = [];  // EvaluationStep records
+    const operandStack = [];  // mirrors std::stack<double>
+    const tokens       = postfix.split(/\s+/).filter(Boolean);
 
-    for (var t = 0; t < filteredTokens.length; t++) {
-        var token = filteredTokens[t];
-        var step  = { token: token, action: '', stackState: '', result: null, hasResult: false };
+    for (const token of tokens) {
+        const step = { token, action: '', stackState: '', result: null, hasResult: false };
 
+        // ---- Operand ----
         if (isNumericToken(token)) {
-            var val = parseFloat(token);
+            const val = parseFloat(token);
             operandStack.push(val);
-            step.action = 'Operand ' + formatNum(val) + ' pushed onto stack';
+            step.action = `Push operand ${formatNum(val)} onto stack`;
         }
+
+        // ---- Operator ----
         else if (isOperator(token)) {
             if (operandStack.length < 2) {
-                throw new Error("❌ Invalid Expression: Insufficient operands for operator '" + token + "'");
+                throw new Error(`Error: Insufficient operands for operator '${token}'.`);
             }
-            var b   = operandStack.pop();
-            var a   = operandStack.pop();
-            var res = applyOperation(a, b, token);
+            const b   = operandStack.pop(); // right operand
+            const a   = operandStack.pop(); // left operand
+            const res = applyOperation(a, b, token);
             operandStack.push(res);
-            step.action    = 'Popped top two operands (' + formatNum(b) + ', ' + formatNum(a) + '), evaluated ' + formatNum(a) + ' ' + token + ' ' + formatNum(b) + ' = ' + formatNum(res) + ', and pushed result';
+
+            step.action    = `Pop ${formatNum(b)} and ${formatNum(a)}, compute ${formatNum(a)} ${token} ${formatNum(b)} = ${formatNum(res)}, push result`;
             step.result    = res;
             step.hasResult = true;
         }
 
-        step.stackState = evalStackToString(operandStack.slice());
+        step.stackState = evalStackToString([...operandStack]);
         steps.push(step);
     }
 
-    if (operandStack.length === 0) throw new Error('❌ Invalid Expression: Empty expression after postfix evaluation');
-    if (operandStack.length > 1)   throw new Error('❌ Invalid Expression: Unresolved operands left on stack');
+    if (operandStack.length === 0) throw new Error('Error: Empty expression after postfix evaluation.');
+    if (operandStack.length > 1)   throw new Error('Error: Too many operands — expression may be malformed.');
 
-    return { result: operandStack[0], steps: steps };
+    return { result: operandStack[0], steps };
 }
 
-/* ---- Master Calculate ------------------------------------- */
+/**
+ * calculateExpression()
+ * Main entry point. Validates → Converts → Evaluates.
+ * Mirrors C++ calculateExpression().
+ * @param {string} expression
+ * @returns {CalculatorResult}
+ */
 function calculateExpression(expression) {
-    var result = {
+    const result = {
         success:            false,
         errorMessage:       '',
         originalExpression: expression,
@@ -273,20 +389,23 @@ function calculateExpression(expression) {
         evaluationSteps:    []
     };
 
-    var validationError = validateExpression(expression);
+    // Step 1: Validate
+    const validationError = validateExpression(expression);
     if (validationError) {
         result.errorMessage = validationError;
         return result;
     }
 
     try {
-        var conv = infixToPostfix(expression);
-        result.postfixExpression = conv.postfix;
-        result.conversionSteps   = conv.steps;
+        // Step 2: Convert
+        const { postfix, steps: convSteps } = infixToPostfix(expression);
+        result.postfixExpression = postfix;
+        result.conversionSteps   = convSteps;
 
-        var evl = evaluatePostfix(conv.postfix);
-        result.finalResult     = evl.result;
-        result.evaluationSteps = evl.steps;
+        // Step 3: Evaluate
+        const { result: finalVal, steps: evalSteps } = evaluatePostfix(postfix);
+        result.finalResult    = finalVal;
+        result.evaluationSteps = evalSteps;
 
         result.success = true;
     } catch (err) {
@@ -298,547 +417,564 @@ function calculateExpression(expression) {
 
 /* ============================================================
    SECTION 2: STACK VISUALIZER
+   Animated visual stack display.
 ============================================================ */
 
-function StackVisualizer(container) {
-    this.container = container;
-    this.items     = [];
-}
-
-StackVisualizer.prototype.render = function(stackStr) {
-    if (!stackStr || stackStr === '(empty)') {
-        this._draw([]);
-        return;
-    }
-    var newItems = stackStr.split(' | ');
-    this._draw(newItems);
-    this.items = newItems;
-};
-
-StackVisualizer.prototype._draw = function(items) {
-    this.container.innerHTML = '';
-
-    if (!items || items.length === 0) {
-        var msg = document.createElement('div');
-        msg.className   = 'stack-empty-msg';
-        msg.textContent = 'Empty';
-        this.container.appendChild(msg);
-        return;
+/**
+ * StackVisualizer
+ * Controls an animated stack display in the DOM.
+ */
+class StackVisualizer {
+    /**
+     * @param {HTMLElement} container  The .stack-viz element
+     */
+    constructor(container) {
+        this.container = container;
+        this.items     = []; // current items (bottom → top)
     }
 
-    // Appending bottom to top matches column-reverse layout
-    for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        var el   = document.createElement('div');
-        el.className = 'stack-element';
+    /**
+     * render()
+     * Renders the current state from a stack string.
+     * @param {string} stackStr  e.g. "( | * | +"
+     */
+    render(stackStr) {
+        if (!stackStr || stackStr === '(empty)') {
+            this.items = [];
+            this._draw([]);
+            return;
+        }
+        const newItems = stackStr.split(' | ');
+        this._draw(newItems);
+        this.items = newItems;
+    }
 
-        if (isOperator(item)) {
-            el.className += ' operator-el';
-        } else if (isNumericToken(item) || item === '0') {
-            el.className += ' number-el';
-        } else if (item === '(' || item === ')') {
-            el.className += ' paren-el';
+    /**
+     * _draw()
+     * Internal: clears and redraws the stack elements.
+     * @param {string[]} items
+     */
+    _draw(items) {
+        // Clear existing content
+        this.container.innerHTML = '';
+
+        if (items.length === 0) {
+            const msg = document.createElement('div');
+            msg.className = 'stack-empty-msg';
+            msg.textContent = 'Stack is empty';
+            this.container.appendChild(msg);
+            return;
         }
 
-        el.textContent = item;
-        this.container.appendChild(el);
+        // Draw from bottom to top (items[0] = bottom, items[last] = top)
+        items.forEach((item, i) => {
+            const el = document.createElement('div');
+            el.className = 'stack-element';
+
+            // Determine element type for styling
+            if (isOperator(item)) {
+                el.classList.add('operator-el');
+            } else if (isNumericToken(item) || item === '0') {
+                el.classList.add('number-el');
+            } else if (item === '(' || item === ')') {
+                el.classList.add('paren-el');
+            }
+
+            el.textContent = item;
+
+            // Push animation only for the new top element
+            if (i === items.length - 1) {
+                el.classList.add('push-anim');
+            }
+
+            this.container.appendChild(el);
+        });
     }
-};
+}
 
 /* ============================================================
    SECTION 3: HISTORY MANAGER
+   Persists expression history in localStorage.
 ============================================================ */
 
-var HISTORY_KEY = 'stackcalc_history';
-var MAX_HISTORY = 20;
+const HISTORY_KEY = 'stackcalc_history';
+const MAX_HISTORY = 20;
 
+/**
+ * loadHistory()
+ * Loads history array from localStorage.
+ * @returns {HistoryItem[]}
+ */
 function loadHistory() {
     try {
-        var raw = localStorage.getItem(HISTORY_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    } catch {
         return [];
     }
 }
 
+/**
+ * saveHistory()
+ * Saves history array to localStorage.
+ * @param {HistoryItem[]} history
+ */
 function saveHistory(history) {
     try {
         localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     } catch (e) {
+        // localStorage might be unavailable in some environments
         console.warn('Could not save history:', e);
     }
 }
 
+/**
+ * addToHistory()
+ * Prepends a new entry to the history, capped at MAX_HISTORY.
+ * @param {string} expression
+ * @param {string} postfix
+ * @param {number} result
+ */
 function addToHistory(expression, postfix, result) {
-    var history = loadHistory();
-    var entry = {
+    const history = loadHistory();
+    const entry   = {
         id:         Date.now(),
         expression: expression,
         postfix:    postfix,
         result:     formatNum(result),
         time:       new Date().toLocaleTimeString()
     };
-    history.unshift(entry);
-    if (history.length > MAX_HISTORY) history.pop();
+    history.unshift(entry); // prepend
+    if (history.length > MAX_HISTORY) history.pop(); // keep cap
     saveHistory(history);
     return history;
 }
 
 /* ============================================================
    SECTION 4: DOM CONTROLLER
+   All UI logic — rendering results, events, theming.
 ============================================================ */
 
-function el(id) { return document.getElementById(id); }
+/** DOM element cache */
+const DOM = {
+    bgParticles:     () => document.getElementById('bg-particles'),
+    themeToggle:     () => document.getElementById('theme-toggle'),
+    themeIcon:       () => document.getElementById('theme-icon'),
+    shortcutsBtn:    () => document.getElementById('shortcuts-btn'),
+    shortcutsModal:  () => document.getElementById('shortcuts-modal'),
+    closeModalBtn:   () => document.getElementById('close-modal-btn'),
+    exprInput:       () => document.getElementById('expression-input'),
+    clearInputBtn:   () => document.getElementById('clear-input-btn'),
+    randomBtn:       () => document.getElementById('random-btn'),
+    calculateBtn:    () => document.getElementById('calculate-btn'),
+    resetBtn:        () => document.getElementById('reset-btn'),
+    errorPanel:      () => document.getElementById('error-panel'),
+    errorText:       () => document.getElementById('error-text'),
+    resultsSection:  () => document.getElementById('results-section'),
+    originalExpr:    () => document.getElementById('original-expr'),
+    postfixExpr:     () => document.getElementById('postfix-expr'),
+    finalResult:     () => document.getElementById('final-result'),
+    copyResultBtn:   () => document.getElementById('copy-result-btn'),
+    downloadBtn:     () => document.getElementById('download-btn'),
+    conversionTbody: () => document.getElementById('conversion-tbody'),
+    evaluationTbody: () => document.getElementById('evaluation-tbody'),
+    opStackViz:      () => document.getElementById('op-stack-viz'),
+    evalStackViz:    () => document.getElementById('eval-stack-viz'),
+    historyList:     () => document.getElementById('history-list'),
+    historyEmpty:    () => document.getElementById('history-empty'),
+    clearHistoryBtn: () => document.getElementById('clear-history-btn'),
+    toast:           () => document.getElementById('toast'),
+};
 
-/* Global state & Animation Timers */
-var currentResult   = null;
-var opVisualizer    = null;
-var evalVisualizer  = null;
-var currentTheme    = 'dark';
-var toastTimer      = null;
-var animationTimers = [];
+/** Global state */
+let currentResult     = null;
+let opVisualizer      = null;
+let evalVisualizer    = null;
+let currentTheme      = 'dark';
+let convAnimTimeout   = null;
+let evalAnimTimeout   = null;
 
 /* ---- Theme ------------------------------------------------ */
+
 function initTheme() {
-    var saved = 'dark';
-    try { saved = localStorage.getItem('stackcalc_theme') || 'dark'; } catch(e) {}
+    const saved = localStorage.getItem('stackcalc_theme') || 'dark';
     setTheme(saved);
 }
 
 function setTheme(theme) {
     currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('stackcalc_theme', theme); } catch(e) {}
-    var icon = el('theme-icon');
-    if (icon) icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+    localStorage.setItem('stackcalc_theme', theme);
+    const icon = DOM.themeIcon();
+    if (icon) {
+        icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+    }
 }
 
 function toggleTheme() {
     setTheme(currentTheme === 'dark' ? 'light' : 'dark');
-    showToast(currentTheme === 'dark' ? '🌙 Dark theme enabled' : '☀️ Light theme enabled', 'info');
+    showToast(currentTheme === 'dark' ? '🌙 Dark mode on' : '☀️ Light mode on', 'info');
 }
 
-/* ---- Toast ------------------------------------------------ */
-function showToast(msg, type, duration) {
-    if (!type)     type     = 'info';
-    if (!duration) duration = 2800;
+/* ---- Background Particles --------------------------------- */
 
-    var toast = el('toast');
+function initParticles() {
+    const container = DOM.bgParticles();
+    if (!container) return;
+
+    const count = window.innerWidth < 600 ? 15 : 30;
+    const colors = [
+        'rgba(139,92,246,0.6)',
+        'rgba(6,182,212,0.5)',
+        'rgba(16,185,129,0.4)',
+        'rgba(245,158,11,0.3)',
+    ];
+
+    for (let i = 0; i < count; i++) {
+        const el   = document.createElement('div');
+        const size = Math.random() * 4 + 2;
+        const x    = Math.random() * 100;
+        const dur  = Math.random() * 12 + 6;
+        const del  = Math.random() * 8;
+        const col  = colors[Math.floor(Math.random() * colors.length)];
+
+        el.className = 'particle';
+        Object.assign(el.style, {
+            width:  size + 'px',
+            height: size + 'px',
+            left:   x + '%',
+            background: col,
+            '--dur':   dur + 's',
+            '--delay': del + 's',
+            boxShadow: `0 0 ${size * 2}px ${col}`,
+        });
+        container.appendChild(el);
+    }
+}
+
+/* ---- Toast Notification ----------------------------------- */
+
+let toastTimer = null;
+
+/**
+ * showToast()
+ * Shows a brief status notification.
+ * @param {string} msg
+ * @param {'success'|'error'|'info'} type
+ * @param {number} duration  ms
+ */
+function showToast(msg, type = 'info', duration = 2800) {
+    const toast = DOM.toast();
     if (!toast) return;
 
     toast.textContent = msg;
-    toast.className   = 'toast ' + type + ' show';
+    toast.className   = `toast ${type} show`;
 
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function() {
-        toast.className = 'toast ' + type;
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
     }, duration);
 }
 
-/* ---- Error Panel ------------------------------------------ */
-function showError(msg) {
-    var panel = el('error-panel');
-    var text  = el('error-text');
-    var icon  = el('error-icon');
-    
-    if (text) text.textContent = msg;
-    if (icon) {
-        if (msg.indexOf('❌') === 0) {
-            icon.innerHTML = '<i class="fas fa-circle-xmark"></i>';
-            icon.style.color = 'var(--error)';
-        } else {
-            icon.innerHTML = '<i class="fas fa-triangle-exclamation"></i>';
-            icon.style.color = 'var(--warn)';
-        }
-    }
+/* ---- Error Display ---------------------------------------- */
 
+function showError(msg) {
+    const panel = DOM.errorPanel();
+    const text  = DOM.errorText();
+    if (text) text.textContent = msg;
     if (panel) {
         panel.removeAttribute('hidden');
         panel.style.animation = 'none';
-        panel.offsetWidth; // force reflow
+        // Trigger reflow for re-animation
+        void panel.offsetWidth;
         panel.style.animation = '';
     }
 }
 
 function hideError() {
-    var panel = el('error-panel');
+    const panel = DOM.errorPanel();
     if (panel) panel.setAttribute('hidden', '');
 }
 
 /* ---- Syntax Highlighting ---------------------------------- */
+
+/**
+ * highlightExpression()
+ * Wraps digits and operators in colored spans.
+ * @param {string} expr
+ * @returns {string} HTML string
+ */
 function highlightExpression(expr) {
     // Single pass, so later replacements never touch the <span> markup already inserted
-    return expr.replace(/(\d+\.?\d*)|([+\-*\/%^])|([()])/g, function (m, num, op, paren) {
-        if (num) return '<span class="expr-num">' + num + '</span>';
-        if (op)  return '<span class="expr-op">' + op + '</span>';
-        return '<span class="expr-paren">' + paren + '</span>';
+    return expr.replace(/(\d+\.?\d*)|([+\-*\/%^])|([()])/g, (m, num, op, paren) => {
+        if (num)   return `<span class="expr-num">${num}</span>`;
+        if (op)    return `<span class="expr-op">${op}</span>`;
+        return `<span class="expr-paren">${paren}</span>`;
     });
 }
 
-/* ---- Highlight Processed Token --------------------------- */
-function getHighlightedTokenHTML(token) {
-    var cls = 'token-highlight';
-    if (isOperator(token)) cls += ' is-operator';
-    else if (token === '(' || token === ')') cls += ' is-paren';
-    else if (isNumericToken(token)) cls += ' is-number';
-    return '<span class="' + cls + '">' + escHtml(token) + '</span>';
-}
+/* ---- Render Conversion Table ------------------------------ */
 
-/* ---- Escape HTML ------------------------------------------ */
-function escHtml(str) {
-    if (str === null || str === undefined) return '';
-    str = String(str);
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-/* ---- Clear active animation timeouts --------------------- */
-function clearAllAnimations() {
-    for (var i = 0; i < animationTimers.length; i++) {
-        clearTimeout(animationTimers[i]);
-    }
-    animationTimers = [];
-}
-
-/* ============================================================
-   PROGRESS INDICATOR MANAGEMENT
-============================================================ */
-function updateProgressBar(stage) {
-    var bar = el('progress-bar');
-    if (!bar) return;
-    bar.removeAttribute('hidden');
-
-    var stepInput   = el('prog-input');
-    var stepConvert = el('prog-convert');
-    var stepEval    = el('prog-eval');
-    var stepResult  = el('prog-result');
-
-    var steps = [stepInput, stepConvert, stepEval, stepResult];
-    for (var i = 0; i < steps.length; i++) {
-        if (steps[i]) steps[i].className = 'progress-step';
-    }
-
-    if (stage === 'input') {
-        if (stepInput) stepInput.className += ' done';
-    } else if (stage === 'convert') {
-        if (stepInput) stepInput.className += ' done';
-        if (stepConvert) stepConvert.className += ' done';
-    } else if (stage === 'eval') {
-        if (stepInput) stepInput.className += ' done';
-        if (stepConvert) stepConvert.className += ' done';
-        if (stepEval) stepEval.className += ' done';
-    } else if (stage === 'result') {
-        if (stepInput) stepInput.className += ' done';
-        if (stepConvert) stepConvert.className += ' done';
-        if (stepEval) stepEval.className += ' done';
-        if (stepResult) stepResult.className += ' done';
-    }
-}
-
-/* ============================================================
-   DEMO ANIMATION & RENDER PIPELINES
-   (Slowed down animation rate to 1000ms per step)
-============================================================ */
-
-function runInfixToPostfixDemo(steps, onComplete) {
-    var tbody = el('conversion-tbody');
+/**
+ * renderConversionTable()
+ * Populates the Infix→Postfix step table with animated rows.
+ * @param {ConversionStep[]} steps
+ */
+function renderConversionTable(steps) {
+    const tbody = DOM.conversionTbody();
     if (!tbody) return;
     tbody.innerHTML = '';
-    
-    updateProgressBar('convert');
-    if (opVisualizer) opVisualizer.render('(empty)');
 
-    var delay = 1000; // 1 second per step for clean presentation
+    steps.forEach((step, i) => {
+        const tr = document.createElement('tr');
+        tr.style.animationDelay = `${i * 60}ms`;
 
-    function animateStep(idx) {
-        if (idx >= steps.length) {
-            // Remove active-row class from last row
-            var rows = tbody.querySelectorAll('tr');
-            if (rows.length > 0) {
-                rows[rows.length - 1].classList.remove('active-row');
-            }
-            if (onComplete) onComplete();
-            return;
-        }
-
-        var step = steps[idx];
-        var tr   = document.createElement('tr');
-        tr.className = 'active-row';
-
-        // Remove active class from previous rows
-        var oldActive = tbody.querySelector('.active-row');
-        if (oldActive) oldActive.classList.remove('active-row');
-
-        var tokenClass = '';
-        if (isNumericToken(step.token))      tokenClass = 'expr-num';
-        else if (isOperator(step.token))     tokenClass = 'expr-op';
+        // Determine token styling
+        let tokenClass = '';
+        if (isNumericToken(step.token)) tokenClass = 'expr-num';
+        else if (isOperator(step.token)) tokenClass = 'expr-op';
         else if (step.token === '(' || step.token === ')') tokenClass = 'expr-paren';
 
-        tr.innerHTML =
-            '<td><span class="step-num">' + (idx + 1) + '</span></td>' +
-            '<td class="token-cell">' + getHighlightedTokenHTML(step.token) + '</td>' +
-            '<td class="action-cell">'  + escHtml(step.action)      + '</td>' +
-            '<td class="stack-cell">'   + escHtml(step.stackState)  + '</td>' +
-            '<td class="postfix-cell">' + escHtml(step.postfixSoFar)+ '</td>';
-
+        tr.innerHTML = `
+            <td><span class="step-num">${i + 1}</span></td>
+            <td class="token-cell"><span class="${tokenClass}">${escHtml(step.token)}</span></td>
+            <td class="action-cell">${escHtml(step.action)}</td>
+            <td class="stack-cell">${escHtml(step.stackState)}</td>
+            <td class="postfix-cell">${escHtml(step.postfixSoFar)}</td>
+        `;
         tbody.appendChild(tr);
-        
-        // Render step stack in visualizer
-        if (opVisualizer) opVisualizer.render(step.stackState);
+    });
 
-        // Scroll row into view gently
-        tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-        var timer = setTimeout(function() {
-            animateStep(idx + 1);
-        }, delay);
-        animationTimers.push(timer);
+    // Update operator stack visualizer to final state
+    if (opVisualizer && steps.length > 0) {
+        opVisualizer.render(steps[steps.length - 1].stackState);
     }
 
-    animateStep(0);
+    // Animate stack through all steps
+    animateStackThrough(opVisualizer, steps.map(s => s.stackState), convAnimTimeout);
 }
 
-function runPostfixEvaluationDemo(steps, onComplete) {
-    var tbody = el('evaluation-tbody');
+/* ---- Render Evaluation Table ------------------------------ */
+
+/**
+ * renderEvaluationTable()
+ * Populates the Postfix evaluation step table.
+ * @param {EvaluationStep[]} steps
+ */
+function renderEvaluationTable(steps) {
+    const tbody = DOM.evaluationTbody();
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    updateProgressBar('eval');
-    if (evalVisualizer) evalVisualizer.render('(empty)');
+    steps.forEach((step, i) => {
+        const tr = document.createElement('tr');
+        tr.style.animationDelay = `${i * 80}ms`;
 
-    var delay = 1000;
-
-    function animateStep(idx) {
-        if (idx >= steps.length) {
-            var rows = tbody.querySelectorAll('tr');
-            if (rows.length > 0) {
-                rows[rows.length - 1].classList.remove('active-row');
-            }
-            if (onComplete) onComplete();
-            return;
-        }
-
-        var step = steps[idx];
-        var tr   = document.createElement('tr');
-        tr.className = 'active-row';
-
-        var oldActive = tbody.querySelector('.active-row');
-        if (oldActive) oldActive.classList.remove('active-row');
-
-        tr.innerHTML =
-            '<td><span class="step-num">' + (idx + 1) + '</span></td>' +
-            '<td class="token-cell">' + getHighlightedTokenHTML(step.token) + '</td>' +
-            '<td class="action-cell">'  + escHtml(step.action)     + '</td>' +
-            '<td class="stack-cell">'   + escHtml(step.stackState) + '</td>';
-
+        tr.innerHTML = `
+            <td><span class="step-num">${i + 1}</span></td>
+            <td class="token-cell">${escHtml(step.token)}</td>
+            <td class="action-cell">${escHtml(step.action)}</td>
+            <td class="stack-cell">${escHtml(step.stackState)}</td>
+        `;
         tbody.appendChild(tr);
+    });
 
-        if (evalVisualizer) evalVisualizer.render(step.stackState);
-
-        tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-        var timer = setTimeout(function() {
-            animateStep(idx + 1);
-        }, delay);
-        animationTimers.push(timer);
-    }
-
-    animateStep(0);
+    // Animate eval stack through steps
+    animateStackThrough(evalVisualizer, steps.map(s => s.stackState), evalAnimTimeout);
 }
 
-/* ---- Render Full Results --------------------------------------- */
+/**
+ * animateStackThrough()
+ * Animates the stack visualizer through a series of states with delays.
+ * @param {StackVisualizer} viz
+ * @param {string[]} states
+ * @param {*} timerRef  (unused directly — local)
+ */
+function animateStackThrough(viz, states, timerRef) {
+    if (!viz || states.length === 0) return;
+
+    let idx = 0;
+    function next() {
+        if (idx >= states.length) return;
+        viz.render(states[idx]);
+        idx++;
+        setTimeout(next, 400);
+    }
+    next();
+}
+
+/* ---- Render Full Results ---------------------------------- */
+
+/**
+ * renderResults()
+ * Takes a CalculatorResult and renders the full results UI.
+ * @param {CalculatorResult} result
+ */
 function renderResults(result) {
     currentResult = result;
 
-    var section = el('results-section');
-    if (section) section.removeAttribute('hidden');
+    // Show results section
+    const section = DOM.resultsSection();
+    if (section) {
+        section.removeAttribute('hidden');
+        section.style.animation = 'none';
+        void section.offsetWidth;
+        section.style.animation = 'fadeInUp 0.6s ease both';
+    }
 
-    var origEl = el('original-expr');
-    var postEl = el('postfix-expr');
-    var resEl  = el('final-result');
+    // Overview cards
+    const origEl   = DOM.originalExpr();
+    const postEl   = DOM.postfixExpr();
+    const resEl    = DOM.finalResult();
 
-    if (origEl) origEl.innerHTML  = highlightExpression(escHtml(result.originalExpression));
+    if (origEl) origEl.innerHTML = highlightExpression(escHtml(result.originalExpression));
     if (postEl) postEl.textContent = result.postfixExpression;
 
     if (resEl) {
-        resEl.textContent = formatNum(result.finalResult);
+        const numStr = formatNum(result.finalResult);
+        resEl.textContent = numStr;
+        // Pop-in animation
         resEl.style.animation = 'none';
-        resEl.offsetWidth;
+        void resEl.offsetWidth;
         resEl.style.animation = 'scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both';
     }
 
-    // Run conversion animation, followed by evaluation animation
-    runInfixToPostfixDemo(result.conversionSteps, function() {
-        runPostfixEvaluationDemo(result.evaluationSteps, function() {
-            updateProgressBar('result');
-            showToast('Calculation complete!', 'success');
-            
-            // Scroll result card into view at the end
-            var resCard = el('result-card');
-            if (resCard) {
-                setTimeout(function() {
-                    resCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 200);
-            }
-        });
-    });
+    // Render tables
+    renderConversionTable(result.conversionSteps);
+    renderEvaluationTable(result.evaluationSteps);
+
+    // Scroll to results
+    setTimeout(() => {
+        section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
 }
 
-/* ---- Handle Calculate ------------------------------------- */
-function handleCalculate() {
-    var input   = el('expression-input');
-    var calcBtn = el('calculate-btn');
+/* ---- Calculate -------------------------------------------- */
+
+/**
+ * handleCalculate()
+ * Main handler: reads input, runs algorithm, renders result.
+ */
+async function handleCalculate() {
+    const input    = DOM.exprInput();
+    const calcBtn  = DOM.calculateBtn();
     if (!input || !calcBtn) return;
 
-    var expr = input.value.trim();
+    const expr = input.value.trim();
     hideError();
-    clearAllAnimations();
-
-    // Reset progress indicator to input state
-    updateProgressBar('input');
 
     // Show loading state
     calcBtn.classList.add('loading');
     calcBtn.disabled = true;
 
-    setTimeout(function() {
-        var result = calculateExpression(expr);
+    // Small artificial delay for UX (shows loading animation)
+    await new Promise(r => setTimeout(r, 350));
 
-        calcBtn.classList.remove('loading');
-        calcBtn.disabled = false;
+    const result = calculateExpression(expr);
 
-        if (!result.success) {
-            showError(result.errorMessage);
-            var section = el('results-section');
-            if (section) section.setAttribute('hidden', '');
-            
-            var progress = el('progress-bar');
-            if (progress) progress.setAttribute('hidden', '');
+    // Remove loading state
+    calcBtn.classList.remove('loading');
+    calcBtn.disabled = false;
 
-            showToast(result.errorMessage, 'error', 4000);
-            return;
-        }
+    if (!result.success) {
+        showError(result.errorMessage);
+        // Hide results if previously shown
+        const section = DOM.resultsSection();
+        if (section) section.setAttribute('hidden', '');
+        showToast('⚠️ ' + result.errorMessage, 'error', 4000);
+        return;
+    }
 
-        renderResults(result);
-        addToHistory(result.originalExpression, result.postfixExpression, result.finalResult);
-        renderHistory();
-    }, 200);
+    // Success
+    renderResults(result);
+
+    // Add to history
+    addToHistory(result.originalExpression, result.postfixExpression, result.finalResult);
+    renderHistory();
+
+    showToast(`✅ Result: ${formatNum(result.finalResult)}`, 'success');
 }
 
-/* ---- Handle Reset ----------------------------------------- */
+/* ---- Reset ----------------------------------------------- */
+
 function handleReset() {
-    var input    = el('expression-input');
-    var section  = el('results-section');
-    var progress = el('progress-bar');
+    const input   = DOM.exprInput();
+    const section = DOM.resultsSection();
 
-    clearAllAnimations();
-
-    if (input)   { input.value = ''; input.focus(); }
+    if (input) { input.value = ''; input.focus(); }
     if (section) section.setAttribute('hidden', '');
-    if (progress) progress.setAttribute('hidden', '');
-    
     hideError();
     currentResult = null;
 
+    // Clear visualizers
     if (opVisualizer)   opVisualizer.render('(empty)');
     if (evalVisualizer) evalVisualizer.render('(empty)');
 }
 
-/* ---- Handle Copy ------------------------------------------ */
-function handleCopyResult() {
+/* ---- Copy Result ------------------------------------------ */
+
+async function handleCopyResult() {
     if (!currentResult) return;
-    var text = 'Expression: ' + currentResult.originalExpression +
-               '\nPostfix: '  + currentResult.postfixExpression  +
-               '\nResult: '   + formatNum(currentResult.finalResult);
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-            showToast('Result copied to clipboard!', 'success');
-        }).catch(function() {
-            fallbackCopy(text);
-        });
-    } else {
-        fallbackCopy(text);
-    }
-}
-
-function fallbackCopy(text) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity  = '0';
-    document.body.appendChild(ta);
-    ta.select();
+    const text = `Expression: ${currentResult.originalExpression}\nPostfix: ${currentResult.postfixExpression}\nResult: ${formatNum(currentResult.finalResult)}`;
     try {
-        document.execCommand('copy');
-        showToast('Result copied to clipboard!', 'success');
-    } catch (e) {
-        showToast('Could not copy automatically.', 'error');
+        await navigator.clipboard.writeText(text);
+        showToast('📋 Result copied to clipboard!', 'success');
+    } catch {
+        showToast('❌ Could not copy. Try manually.', 'error');
     }
-    document.body.removeChild(ta);
 }
 
-/* ---- Handle Download -------------------------------------- */
+/* ---- Download Result -------------------------------------- */
+
 function handleDownload() {
     if (!currentResult) return;
 
-    var lines = [
+    const lines = [
         '====================================================',
-        '  EXPRESSION CALCULATOR USING STACK',
-        '  DSA Mini Project Report',
+        '  EXPRESSION CALCULATOR USING STACK — Result',
         '====================================================',
-        'Developed By: Sneha Mangwani',
-        'B.Tech CSE, Lovely Professional University',
-        '----------------------------------------------------',
-        'Original Expression : ' + currentResult.originalExpression,
-        'Postfix Expression  : ' + currentResult.postfixExpression,
-        'Final Result        : ' + formatNum(currentResult.finalResult),
+        '',
+        `Original Expression : ${currentResult.originalExpression}`,
+        `Postfix Expression  : ${currentResult.postfixExpression}`,
+        `Final Result        : ${formatNum(currentResult.finalResult)}`,
         '',
         '---- INFIX TO POSTFIX CONVERSION STEPS ----',
-        ''
+        '',
     ];
 
-    for (var i = 0; i < currentResult.conversionSteps.length; i++) {
-        var s = currentResult.conversionSteps[i];
-        lines.push('Step ' + (i + 1) + ': Token=' + s.token);
-        lines.push('  Action      : ' + s.action);
-        lines.push('  Stack State : ' + s.stackState);
-        lines.push('  Postfix Now : ' + s.postfixSoFar);
+    currentResult.conversionSteps.forEach((s, i) => {
+        lines.push(`Step ${i + 1}: Token=${s.token}`);
+        lines.push(`  Action      : ${s.action}`);
+        lines.push(`  Stack State : ${s.stackState}`);
+        lines.push(`  Postfix Now : ${s.postfixSoFar}`);
         lines.push('');
-    }
+    });
 
     lines.push('---- POSTFIX EVALUATION STEPS ----');
     lines.push('');
 
-    for (var j = 0; j < currentResult.evaluationSteps.length; j++) {
-        var e2 = currentResult.evaluationSteps[j];
-        lines.push('Step ' + (j + 1) + ': Token=' + e2.token);
-        lines.push('  Action      : ' + e2.action);
-        lines.push('  Stack State : ' + e2.stackState);
+    currentResult.evaluationSteps.forEach((s, i) => {
+        lines.push(`Step ${i + 1}: Token=${s.token}`);
+        lines.push(`  Action      : ${s.action}`);
+        lines.push(`  Stack State : ${s.stackState}`);
         lines.push('');
-    }
+    });
 
     lines.push('====================================================');
-    lines.push('Generated at: ' + new Date().toLocaleString());
+    lines.push(`Generated at: ${new Date().toLocaleString()}`);
 
-    var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'expression_calculator_report_' + Date.now() + '.txt';
-    document.body.appendChild(a);
+    a.download = `stackcalc_${Date.now()}.txt`;
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Report downloaded successfully!', 'success');
+    showToast('📥 Result downloaded as TXT!', 'success');
 }
 
 /* ---- Random Example --------------------------------------- */
-var EXAMPLES = [
+
+const EXAMPLES = [
     '((12+4)*5)-(8/2)',
     '3+4*2/(1-5)^2',
     '2^10-1024',
@@ -850,30 +986,32 @@ var EXAMPLES = [
     '5^2+12^2',
     '(10+20)*(30-15)/9',
     '999-((3*4)^2)/9',
-    '(2^3)*(5+1)-7'
+    '(2^3)*(5+1)-7',
 ];
 
 function handleRandom() {
-    var input = el('expression-input');
+    const input = DOM.exprInput();
     if (!input) return;
-    var example = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)];
-    input.value = example;
+    const ex = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)];
+    input.value = ex;
     input.focus();
-    input.style.borderColor = 'var(--primary)';
-    setTimeout(function() { input.style.borderColor = ''; }, 600);
-    showToast('Loaded example: ' + example, 'info');
+    // Highlight / flash the input
+    input.style.borderColor = '#8b5cf6';
+    setTimeout(() => { input.style.borderColor = ''; }, 800);
+    showToast(`🎲 Loaded: ${ex}`, 'info');
 }
 
 /* ---- History UI ------------------------------------------- */
+
 function renderHistory() {
-    var list  = el('history-list');
-    var empty = el('history-empty');
+    const list  = DOM.historyList();
+    const empty = DOM.historyEmpty();
     if (!list) return;
 
-    var old = list.querySelectorAll('.history-item');
-    for (var r = 0; r < old.length; r++) list.removeChild(old[r]);
+    const history = loadHistory();
 
-    var history = loadHistory();
+    // Remove old items (keep empty message in DOM)
+    list.querySelectorAll('.history-item').forEach(el => el.remove());
 
     if (history.length === 0) {
         if (empty) empty.style.display = '';
@@ -881,111 +1019,204 @@ function renderHistory() {
     }
     if (empty) empty.style.display = 'none';
 
-    for (var i = 0; i < history.length; i++) {
-        (function(entry) {
-            var item = document.createElement('div');
-            item.className = 'history-item';
-            item.setAttribute('role', 'listitem');
-            item.setAttribute('title', 'Click to load this expression');
+    history.forEach(entry => {
+        const item = document.createElement('div');
+        item.className   = 'history-item';
+        item.setAttribute('role', 'listitem');
+        item.setAttribute('title', 'Click to load this expression');
 
-            item.innerHTML =
-                '<span class="history-expr">' + escHtml(entry.expression) + '</span>' +
-                '<div class="history-meta">' +
-                    '<span class="history-result">= ' + escHtml(entry.result) + '</span>' +
-                    '<span class="history-time">'     + escHtml(entry.time)   + '</span>' +
-                    '<button class="history-load-btn" title="Load">' +
-                        '<i class="fas fa-play"></i>' +
-                    '</button>' +
-                '</div>';
+        item.innerHTML = `
+            <span class="history-expr">${escHtml(entry.expression)}</span>
+            <div class="history-meta">
+                <span class="history-result">= ${escHtml(entry.result)}</span>
+                <span class="history-time">${escHtml(entry.time)}</span>
+                <button class="history-load-btn" title="Load" aria-label="Load expression ${escHtml(entry.expression)}">
+                    <i class="fas fa-play" aria-hidden="true"></i>
+                </button>
+            </div>
+        `;
 
-            item.addEventListener('click', function() {
-                var inp = el('expression-input');
-                if (inp) {
-                    inp.value = entry.expression;
-                    inp.focus();
-                    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            });
+        // Click to load
+        item.addEventListener('click', () => {
+            const input = DOM.exprInput();
+            if (input) {
+                input.value = entry.expression;
+                input.focus();
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
 
-            list.insertBefore(item, list.firstChild);
-        })(history[i]);
-    }
+        list.insertBefore(item, list.firstChild);
+    });
 }
 
 function handleClearHistory() {
     saveHistory([]);
     renderHistory();
-    showToast('History cleared!', 'info');
+    showToast('🗑️ History cleared!', 'info');
 }
 
-/* ---- Keyboard Shortcuts (Enter and Esc only) -------------- */
-function initKeyboardShortcuts() {
-    document.addEventListener('keydown', function(e) {
-        var activeTag = document.activeElement ? document.activeElement.tagName : '';
-        var inInput   = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+/* ---- Modal ------------------------------------------------ */
 
-        if (e.key === 'Enter' && inInput) {
-            e.preventDefault();
-            handleCalculate();
+function openModal() {
+    const modal = DOM.shortcutsModal();
+    if (modal) {
+        modal.removeAttribute('hidden');
+        DOM.closeModalBtn()?.focus();
+    }
+}
+
+function closeModal() {
+    const modal = DOM.shortcutsModal();
+    if (modal) modal.setAttribute('hidden', '');
+}
+
+/* ---- Utility ---------------------------------------------- */
+
+/**
+ * escHtml()
+ * Escapes HTML special characters to prevent XSS.
+ * @param {string} str
+ * @returns {string}
+ */
+function escHtml(str) {
+    if (typeof str !== 'string') return String(str ?? '');
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/* ---- Keyboard Shortcuts ----------------------------------- */
+
+function initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        const tag = document.activeElement?.tagName;
+        const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+        // Enter: calculate (when focused in input or globally)
+        if (e.key === 'Enter' && (inInput || !inInput)) {
+            if (inInput) { e.preventDefault(); handleCalculate(); }
         }
 
+        // Esc: close modal or reset
         if (e.key === 'Escape') {
-            handleReset();
+            const modal = DOM.shortcutsModal();
+            if (modal && !modal.hasAttribute('hidden')) {
+                closeModal();
+            } else {
+                handleReset();
+            }
+        }
+
+        // Ctrl+R: random example
+        if (e.ctrlKey && e.key === 'r') {
+            e.preventDefault();
+            handleRandom();
+        }
+
+        // Ctrl+D: toggle theme
+        if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            toggleTheme();
+        }
+
+        // Ctrl+C: copy result (only when result is shown)
+        if (e.ctrlKey && e.key === 'c' && currentResult) {
+            // Only intercept if not in input to avoid interrupting text copy
+            if (!inInput) {
+                e.preventDefault();
+                handleCopyResult();
+            }
+        }
+
+        // Ctrl+S: download
+        if (e.ctrlKey && e.key === 's' && currentResult) {
+            e.preventDefault();
+            handleDownload();
         }
     });
 }
 
 /* ============================================================
    SECTION 5: APP INITIALIZER
+   Wires up all event listeners and initializes subsystems.
 ============================================================ */
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    // Init theme
     initTheme();
 
-    var opVizEl   = el('op-stack-viz');
-    var evalVizEl = el('eval-stack-viz');
+    // Init particles
+    initParticles();
+
+    // Init stack visualizers
+    const opVizEl   = DOM.opStackViz();
+    const evalVizEl = DOM.evalStackViz();
     if (opVizEl)   opVisualizer   = new StackVisualizer(opVizEl);
     if (evalVizEl) evalVisualizer = new StackVisualizer(evalVizEl);
 
+    // Render existing history
     renderHistory();
+
+    // Init keyboard shortcuts
     initKeyboardShortcuts();
 
-    var themeBtn   = el('theme-toggle');
-    var clrInBtn   = el('clear-input-btn');
-    var calcBtn    = el('calculate-btn');
-    var resetBtn   = el('reset-btn');
-    var randBtn    = el('random-btn');
-    var copyBtn    = el('copy-result-btn');
-    var dlBtn      = el('download-btn');
-    var clrHisBtn  = el('clear-history-btn');
-    var inputField = el('expression-input');
+    // ---- Event Listeners ----
 
-    if (themeBtn)   themeBtn.addEventListener('click', toggleTheme);
+    // Theme toggle
+    DOM.themeToggle()?.addEventListener('click', toggleTheme);
 
-    if (inputField) {
-        inputField.addEventListener('input', function() { hideError(); });
+    // Shortcuts modal
+    DOM.shortcutsBtn()?.addEventListener('click', openModal);
+    DOM.closeModalBtn()?.addEventListener('click', closeModal);
+    DOM.shortcutsModal()?.addEventListener('click', (e) => {
+        if (e.target === DOM.shortcutsModal()) closeModal();
+    });
+
+    // Expression input — live syntax feedback
+    DOM.exprInput()?.addEventListener('input', () => {
+        // Hide previous errors on new input
+        hideError();
+    });
+
+    // Clear input
+    DOM.clearInputBtn()?.addEventListener('click', () => {
+        const input = DOM.exprInput();
+        if (input) { input.value = ''; input.focus(); }
+        hideError();
+    });
+
+    // Calculate
+    DOM.calculateBtn()?.addEventListener('click', handleCalculate);
+
+    // Reset
+    DOM.resetBtn()?.addEventListener('click', handleReset);
+
+    // Random example
+    DOM.randomBtn()?.addEventListener('click', handleRandom);
+
+    // Copy result
+    DOM.copyResultBtn()?.addEventListener('click', handleCopyResult);
+
+    // Download
+    DOM.downloadBtn()?.addEventListener('click', handleDownload);
+
+    // Clear history
+    DOM.clearHistoryBtn()?.addEventListener('click', handleClearHistory);
+
+    // ---- Auto-load example on first visit ----
+    const input = DOM.exprInput();
+    if (input && !input.value) {
+        input.value = '((12+4)*5)-(8/2)';
     }
 
-    if (clrInBtn) {
-        clrInBtn.addEventListener('click', function() {
-            var inp = el('expression-input');
-            if (inp) { inp.value = ''; inp.focus(); }
-            hideError();
-        });
-    }
+    // ---- Focus input on load ----
+    input?.focus();
 
-    if (calcBtn)   calcBtn.addEventListener('click', handleCalculate);
-    if (resetBtn)  resetBtn.addEventListener('click', handleReset);
-    if (randBtn)   randBtn.addEventListener('click', handleRandom);
-    if (copyBtn)   copyBtn.addEventListener('click', handleCopyResult);
-    if (dlBtn)     dlBtn.addEventListener('click', handleDownload);
-    if (clrHisBtn) clrHisBtn.addEventListener('click', handleClearHistory);
-
-    if (inputField && !inputField.value) {
-        inputField.value = '((12+4)*5)-(8/2)';
-    }
-
-    if (inputField) inputField.focus();
-
-    console.log('Expression Calculator Using Stack loaded.');
+    console.log('%c StackCalc DSA Project ', 'background:#8b5cf6;color:#fff;font-size:16px;font-weight:bold;border-radius:4px;padding:4px 8px;');
+    console.log('%c Expression Calculator Using Stack | C++ Algorithm in JS ', 'color:#06b6d4;font-size:12px;');
+    console.log('%c Supported: + - * / % ^ with nested brackets ', 'color:#10b981;font-size:12px;');
 });
